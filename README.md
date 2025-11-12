@@ -53,5 +53,5 @@
 - lcparser.h & lcparser.cpp provide a method to read raw ".trc" file
 - WFDataConverter.h provide a method to convert to ROOT file, or just extract useful information directly.
 
-## Problems not saved yet:
+## Problems not solved yet:
 - May have problem in the first configuration, just time "cmake ." again in build directory. This may due to unset "CMAKE_INSTALL_PREFIX" in "ROOT_GENERATE_DICTIONARY" provieded by ROOT package.
