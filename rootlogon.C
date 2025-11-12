@@ -2,7 +2,7 @@ void loadSharedLib()
 {
     // gSystem->Load("/home/john/allpix-squared/lib/libAllpixObjects.so");
     // gSystem->Load("/home/john/allpix-squared/lib/libCorryvreckanWriterObjects.so");
-    gSystem->Load("lcparser/lib/liblcparser.so");
+    gSystem->Load("lib/liblcparser.so");
     std::cout << "Loaded lcparser library." << std::endl;
 }
 
