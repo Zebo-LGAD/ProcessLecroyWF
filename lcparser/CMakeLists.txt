@@ -1,5 +1,10 @@
 # Target Library
 
+# Search all *.h files inside include, but exclude linkdef.h
+file(GLOB_RECURSE HEADER_FILES
+"${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+)
+list(FILTER HEADER_FILES EXCLUDE REGEX "linkdef.h$")
 # Search all *.cpp files inside src
 file(GLOB_RECURSE SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
@@ -31,11 +36,6 @@ target_link_libraries(lcparser
 
 # GENERATE DICTIONARIES
 
-# Search all *.h files inside include, but exclude linkdef.h
-file(GLOB_RECURSE HEADER_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
-)
-list(FILTER HEADER_FILES EXCLUDE REGEX "linkdef.h$")
 
 ROOT_GENERATE_DICTIONARY(G__lcparser
     ${HEADER_FILES}
