@@ -2,3 +2,4 @@
 lib
 pre*
 build/
+*_copy

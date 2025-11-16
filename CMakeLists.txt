@@ -28,15 +28,18 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Add subdirectories
-add_subdirectory(lcparser)
+# add_subdirectory(lcparser)
+add_subdirectory(libs)
 add_subdirectory(tests)
+add_subdirectory(apps)
+# add_subdirectory(analyze)
 
 # Installation configuration
 include (GNUInstallDirs)
 
 # Packaging configuration
 install (
-    TARGETS lcparser
+    TARGETS lcparser 
     EXPORT ProcessLecroyWFTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -44,7 +47,7 @@ install (
 )
 
 install (
-    DIRECTORY lcparser/include/
+    DIRECTORY libs/lcparser/include/ 
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 

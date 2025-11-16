@@ -289,7 +289,7 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
             _found_10 = true;
         }
 
-        if (!_found_t1 && _amp_temp > _threshold) // only search for t1 if threshold is less than max amplitude
+        if (!_found_t1 && _amp_temp < _threshold && (_threshold < _max_a)) // only search for t1 if threshold is less than max amplitude
         {
             _found_t1 = true;
             _t1 = temp_time;
@@ -441,7 +441,7 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
 
         double _tg_y_low = tg.GetYaxis()->GetXmin();
         double _tg_y_high = tg.GetYaxis()->GetXmax();
-        std::cout << "Y axis range: " << _tg_y_low << " to " << _tg_y_high << std::endl;
+        // std::cout << "Y axis range: " << _tg_y_low << " to " << _tg_y_high << std::endl;
 
         static TCanvas *c1 = new TCanvas("c1", "Waveform", 800, 600);
         tg.Draw("AL");
@@ -512,7 +512,7 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
         if (savePrefix.empty())
             savePrefix = Form("../plots/waveform_%05d", count++);
         c1->SaveAs(Form("%s.png", savePrefix.c_str()));
-        std::cout << count << '\t' << _toa << '\t' << _t1 << '\t' << _t2 << '\t' << '\t' << _max_t << '\t' << t[_sample_up] * 1.0e9 << '\t' << t[_sample_down] * 1.0e9 << std::endl;
+        // std::cout << count << '\t' << _toa << '\t' << _t1 << '\t' << _t2 << '\t' << '\t' << _max_t << '\t' << t[_sample_up] * 1.0e9 << '\t' << t[_sample_down] * 1.0e9 << std::endl;
     }
     delete[] _t;
     delete[] _a;
@@ -528,7 +528,7 @@ std::string WFDataProcessor::GenerateScopeFileName(const std::string &folder, in
 
 void WFDataProcessor::GenerateBranchForWaveInfo(TTree *tree, const std::string &branchNamePrefix, WFDataProcessor::_waveinfo *winfo)
 {
-    tree->Branch(Form("%s_valid", branchNamePrefix.c_str()), &winfo->valid, Form("%s_valid/I", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_valid", branchNamePrefix.c_str()), &winfo->valid, Form("%s_valid/i", branchNamePrefix.c_str()));
     tree->Branch(Form("%s_nsamples", branchNamePrefix.c_str()), &winfo->nsamples, Form("%s_nsamples/I", branchNamePrefix.c_str()));
     tree->Branch(Form("%s_ped_start", branchNamePrefix.c_str()), &winfo->ped_start, Form("%s_ped_start/D", branchNamePrefix.c_str()));
     tree->Branch(Form("%s_ped_start_std_dev", branchNamePrefix.c_str()), &winfo->ped_start_std_dev, Form("%s_ped_start_std_dev/D", branchNamePrefix.c_str()));
@@ -575,6 +575,8 @@ WFDataProcessor::WFDataExtractor::WFDataExtractor(std::vector<int> channelsToRea
     for (int ch : channelsToRead)
         fmChExtractConfig[ch] = _extract_config();
 }
+
+
 
 bool WFDataProcessor::WFDataExtractor::AddChannel(int channel)
 {
@@ -653,9 +655,14 @@ bool WFDataProcessor::WFDataExtractor::ExtractFromScopeData(const std::map<int, 
             continue;
         }
         _extract_config config = fmChExtractConfig.at(channel);
+        if (config.need_draw)
+            config.savePrefix += "_counter_" + std::to_string(fExtractedCounter);
+
         WFDataProcessor::processWave(chData->getX().data(), chData->getY().data(), chData->getX().size(), *pair.second, config);
         fmChDataHasData[channel] = true;
     }
+    // Increment extracted counter
+    fExtractedCounter++;
 
     if (fTree)
         fTree->Fill();
@@ -687,6 +694,32 @@ bool WFDataProcessor::WFDataExtractor::ExtractFromWFtrc2ROOT(const WFDataProcess
     return ExtractFromScopeData(convertor.GetChannelDataMap(), convertor.GetChannelDataHasDataMap());
 }
 
+bool WFDataProcessor::WFDataExtractor::TurnOnPlot(int channel, const std::string &savePrefix, bool bswitch)
+{
+
+    if (fmChExtractConfig.find(channel) == fmChExtractConfig.end())
+    {
+        std::cerr << "Channel " << channel << " not found in data extractor." << std::endl;
+        return false;
+    }
+    fmChExtractConfig[channel].need_draw = bswitch;
+    fmChExtractConfig[channel].savePrefix = savePrefix;
+    return true;
+}
+
+int WFDataProcessor::WFDataExtractor::TurnOnPlots(const std::string &savePrefix, bool bswitch)
+{
+    int setCount = 0;
+    for (const auto &pair : fmChExtractConfig)
+    {
+        std::string sPrefixForChannel = Form("%s_ch%d", savePrefix.c_str(), pair.first);
+        auto rtn = TurnOnPlot(pair.first, sPrefixForChannel, bswitch);
+        if (rtn)
+            setCount++;
+    }
+    return setCount;
+}
+
 bool WFDataProcessor::WFDataExtractor::InitTree()
 {
     auto rtn = VMultiIO::InitTree();
@@ -702,6 +735,13 @@ bool WFDataProcessor::WFDataExtractor::InitTree()
         GenerateBranchForWaveInfo(fTree, Form("ch%d", channel), pair.second);
     }
     return true;
+}
+
+void WFDataProcessor::WFDataExtractor::ClearMap()
+{
+    VMultiIO::ClearMap();
+    fmChExtractConfig.clear();
+    fExtractedCounter = 0;
 }
 
 bool WFDataProcessor::WFtrc2ROOT::ReadAllAndFill(const std::string &folder, int idx_file, std::string mid_name, std::string ext)

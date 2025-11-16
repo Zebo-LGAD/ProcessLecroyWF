@@ -4,6 +4,8 @@
 #include <vector>
 #include <map>
 
+#include "lcparser.h"
+
 #include <TFile.h>
 #include <iostream>
 #include <TTree.h>
@@ -29,16 +31,15 @@ namespace WFDataProcessor
     {
         VALID = 0,
         NO_WAVEFORM = 1,
-        NO_T1_FOUND = 2,
-        NO_T1_10_FOUND = 4,
-        NO_T1_50_FOUND = 8,
-        NO_T1_90_FOUND = 16,
-        NO_T2_FOUND = 32,
-        NO_T2_10_FOUND = 64,
-        NO_T2_50_FOUND = 128,
-        NO_T2_90_FOUND = 256,
-
-        RANGE_ERROR = 512,
+        NO_T1_FOUND = 1<<1,
+        NO_T1_10_FOUND = 1<<2,
+        NO_T1_50_FOUND = 1<<3,
+        NO_T1_90_FOUND = 1<<4,
+        NO_T2_FOUND = 1<<5,
+        NO_T2_10_FOUND = 1<<6,
+        NO_T2_50_FOUND = 1<<7,
+        NO_T2_90_FOUND = 1<<8,
+        RANGE_ERROR = 1<<9,
     };
 
     /// @brief Structure to hold extracted waveform information
@@ -61,7 +62,7 @@ namespace WFDataProcessor
         double toa;               ///  Interpolated time of arrival at 50% of maximum amplitude (in ns)
         double ped_end;           ///  Pedestal at the end of the waveform (in mV)
         double ped_end_std_dev;   ///  Standard deviation of the pedestal at the end (in mV)
-        uint16_t valid;           ///  Flag indicating if the waveform is valid (1) or not (0)
+        uint32_t valid;           ///  Flag indicating if the waveform is valid (1) or not (0)
     };
 
     /// @brief Get interpolated time of arrival at given threshold, using linear interpolation
@@ -74,22 +75,7 @@ namespace WFDataProcessor
     /// @param result interpolated time of arrival (output)
     /// @return whether interpolation was successful, if sample_point is 0, return false
     template <typename T>
-    bool interpolateTOA(const T *tarray, const T *aarray, int sample_point, T threshold, T pedestal, T &result)
-    {
-        if (sample_point == 0)
-        {
-            std::cerr << "Warning: First sample point is above threshold, cannot interpolate." << std::endl;
-            result = tarray[sample_point]; // Use the current time if no previous point exists
-            return false;
-        }
-
-        T t_before = tarray[sample_point - 1] * 1.0e9;            // convert to ns
-        T t_after = tarray[sample_point] * 1.0e9;                 // convert to ns
-        T a_before = aarray[sample_point - 1] * 1.0e3 - pedestal; // units in mV
-        T a_after = aarray[sample_point] * 1.0e3 - pedestal;      // units in mV
-        result = t_before + (t_after - t_before) * (threshold - a_before) / (a_after - a_before);
-        return true;
-    }
+    bool interpolateTOA(const T *tarray, const T *aarray, int sample_point, T threshold, T pedestal, T &result);
 
     /// @brief check if a value is within a specified range
     /// @tparam T
@@ -98,12 +84,7 @@ namespace WFDataProcessor
     /// @param range2 range boundary 2
     /// @return whether the value is within the range [min(range1, range2), max(range1, range2)]
     template <typename T>
-    bool rangeCheck(T value, T range1, T range2)
-    {
-        T low = std::min(range1, range2);
-        T high = std::max(range1, range2);
-        return (value >= low && value <= high);
-    }
+    bool rangeCheck(T value, T range1, T range2);
 
     /// @brief Anohter version of interpolateTOA with enhanced range checking, much more robust
     /// @tparam T template type (e.g., float, double)
@@ -116,60 +97,7 @@ namespace WFDataProcessor
     /// @param result interpolated time of arrival (output)
     /// @return
     template <typename T>
-    bool interpolateTOA2(const T *tarray, const T *aarray, int NSamples, int sample_point_around_threshold, T threshold, T pedestal, T &result)
-    {
-        T t_before, t_after, a_before, a_after;
-        bool in_range = 0;
-
-        if (sample_point_around_threshold == 0)
-        {
-            t_before = tarray[sample_point_around_threshold];
-            a_before = aarray[sample_point_around_threshold] - pedestal; // units in mV
-            t_after = tarray[sample_point_around_threshold + 1];
-            a_after = aarray[sample_point_around_threshold + 1] - pedestal; // units in mV
-            in_range = rangeCheck(threshold, a_before, a_after);
-        }
-        else if (sample_point_around_threshold >= NSamples - 1)
-        {
-            t_before = tarray[sample_point_around_threshold - 1];
-            a_before = aarray[sample_point_around_threshold - 1] - pedestal; // units in mV
-            t_after = tarray[sample_point_around_threshold];
-            a_after = aarray[sample_point_around_threshold] - pedestal; // units in mV
-            in_range = rangeCheck(threshold, a_before, a_after);
-        }
-        else
-        {
-            t_before = tarray[sample_point_around_threshold - 1];
-            a_before = aarray[sample_point_around_threshold - 1] - pedestal; // units in mV
-            t_after = tarray[sample_point_around_threshold];
-            a_after = aarray[sample_point_around_threshold] - pedestal; // units in mV
-            in_range = rangeCheck(threshold, a_before, a_after);
-            if (!in_range)
-            {
-                t_before = tarray[sample_point_around_threshold];
-                a_before = aarray[sample_point_around_threshold] - pedestal; // units in mV
-                t_after = tarray[sample_point_around_threshold + 1];
-                a_after = aarray[sample_point_around_threshold + 1] - pedestal; // units in mV
-                in_range = rangeCheck(threshold, a_before, a_after);
-            }
-        }
-
-        if (!in_range)
-        {
-#ifdef VERBOSE_OUTPUT
-            std::cerr << "Warning: Cannot find points around threshold for interpolation." << std::endl;
-            std::cerr << "  Sample point: " << sample_point_around_threshold << " / " << NSamples - 1 << std::endl;
-            std::cerr << "  t_before: " << t_before << " ns, t_after: " << t_after << " ns" << std::endl;
-            std::cerr << "  Threshold: " << threshold << " mV, a_before: " << a_before << " mV, a_after: " << a_after << " mV" << std::endl;
-            std::cerr << std::endl;
-#endif
-            result = tarray[sample_point_around_threshold]; // Use the current time if no previous point exists
-            return false;
-        }
-
-        result = t_before + (t_after - t_before) * (threshold - a_before) / (a_after - a_before);
-        return true;
-    }
+    bool interpolateTOA2(const T *tarray, const T *aarray, int NSamples, int sample_point_around_threshold, T threshold, T pedestal, T &result);
 
     /// @brief Generate the standard filename for LeCroy Scope waveform files
     /// @param folder Folder path that contains the waveform files
@@ -222,9 +150,10 @@ namespace WFDataProcessor
 
         const std::map<int, T *> &GetChannelDataMap() const { return fmChData; };
         const std::map<int, bool> &GetChannelDataHasDataMap() const { return fmChDataHasData; };
+        static VMultiIO<T> *&CurrentInstance();
 
     protected:
-        VMultiIO(bool isRead) : fIsRead(isRead) {};
+        VMultiIO(bool isRead) : fIsRead(isRead) { CurrentInstance() = this; };
         VMultiIO(bool isRead, std::vector<int> channelsToRead);
         VMultiIO(const VMultiIO &) = delete;
         VMultiIO &operator=(const VMultiIO &) = delete;
@@ -286,8 +215,16 @@ namespace WFDataProcessor
         bool ExtractFromTRCFiles(const std::string &folder, int idx_file, std::string mid_name = "--Trace--", std::string ext = ".trc");
         bool ExtractFromWFtrc2ROOT(const WFDataProcessor::WFtrc2ROOT &convertor);
 
+        bool TurnOnPlot(int channel, const std::string &savePrefix, bool bswitch = true);
+        bool TurnOffPlot(int channel) { return TurnOnPlot(channel, "", false); };
+        int TurnOnPlots(const std::string &savePrefix = "", bool bswitch = true);
+        int TurnOffPlots() { return TurnOnPlots("", false); };
+
     private:
         bool InitTree() override;
+
+        virtual void ClearMap() override;
+        int fExtractedCounter = 0;
 
         std::map<int, _extract_config> fmChExtractConfig; // channel -> search range
     };
@@ -329,9 +266,96 @@ namespace WFDataProcessor
     std::string ExtractLastDir(const std::string &path);
 
 }
+#define gWFDataExtractor ((WFDataProcessor::WFDataExtractor *&)WFDataProcessor::WFDataExtractor::CurrentInstance())
+#define gWFtrc2ROOT ((WFDataProcessor::WFtrc2ROOT *&)WFDataProcessor::WFtrc2ROOT::CurrentInstance())
+#define gWFROOTReader ((WFDataProcessor::WFROOTReader *&)WFDataProcessor::WFROOTReader::CurrentInstance())
+#define gWFDataTreeReader ((WFDataProcessor::WFDataTreeReader *&)WFDataProcessor::WFDataTreeReader::CurrentInstance())
 
 namespace WFDataProcessor
 {
+
+    template <typename T>
+    bool interpolateTOA(const T *tarray, const T *aarray, int sample_point, T threshold, T pedestal, T &result)
+    {
+        if (sample_point == 0)
+        {
+            std::cerr << "Warning: First sample point is above threshold, cannot interpolate." << std::endl;
+            result = tarray[sample_point]; // Use the current time if no previous point exists
+            return false;
+        }
+
+        T t_before = tarray[sample_point - 1] * 1.0e9;            // convert to ns
+        T t_after = tarray[sample_point] * 1.0e9;                 // convert to ns
+        T a_before = aarray[sample_point - 1] * 1.0e3 - pedestal; // units in mV
+        T a_after = aarray[sample_point] * 1.0e3 - pedestal;      // units in mV
+        result = t_before + (t_after - t_before) * (threshold - a_before) / (a_after - a_before);
+        return true;
+    }
+
+    template <typename T>
+    bool rangeCheck(T value, T range1, T range2)
+    {
+        T low = std::min(range1, range2);
+        T high = std::max(range1, range2);
+        return (value >= low && value <= high);
+    }
+
+    template <typename T>
+    bool interpolateTOA2(const T *tarray, const T *aarray, int NSamples, int sample_point_around_threshold, T threshold, T pedestal, T &result)
+    {
+        T t_before, t_after, a_before, a_after;
+        bool in_range = 0;
+
+        if (sample_point_around_threshold == 0)
+        {
+            t_before = tarray[sample_point_around_threshold];
+            a_before = aarray[sample_point_around_threshold] - pedestal; // units in mV
+            t_after = tarray[sample_point_around_threshold + 1];
+            a_after = aarray[sample_point_around_threshold + 1] - pedestal; // units in mV
+            in_range = rangeCheck(threshold, a_before, a_after);
+        }
+        else if (sample_point_around_threshold >= NSamples - 1)
+        {
+            t_before = tarray[sample_point_around_threshold - 1];
+            a_before = aarray[sample_point_around_threshold - 1] - pedestal; // units in mV
+            t_after = tarray[sample_point_around_threshold];
+            a_after = aarray[sample_point_around_threshold] - pedestal; // units in mV
+            in_range = rangeCheck(threshold, a_before, a_after);
+        }
+        else
+        {
+            t_before = tarray[sample_point_around_threshold - 1];
+            a_before = aarray[sample_point_around_threshold - 1] - pedestal; // units in mV
+            t_after = tarray[sample_point_around_threshold];
+            a_after = aarray[sample_point_around_threshold] - pedestal; // units in mV
+            in_range = rangeCheck(threshold, a_before, a_after);
+            if (!in_range)
+            {
+                t_before = tarray[sample_point_around_threshold];
+                a_before = aarray[sample_point_around_threshold] - pedestal; // units in mV
+                t_after = tarray[sample_point_around_threshold + 1];
+                a_after = aarray[sample_point_around_threshold + 1] - pedestal; // units in mV
+                in_range = rangeCheck(threshold, a_before, a_after);
+            }
+        }
+
+        if (!in_range)
+        {
+#ifdef VERBOSE_OUTPUT
+            std::cerr << "Warning: Cannot find points around threshold for interpolation." << std::endl;
+            std::cerr << "  Sample point: " << sample_point_around_threshold << " / " << NSamples - 1 << std::endl;
+            std::cerr << "  t_before: " << t_before << " ns, t_after: " << t_after << " ns" << std::endl;
+            std::cerr << "  Threshold: " << threshold << " mV, a_before: " << a_before << " mV, a_after: " << a_after << " mV" << std::endl;
+            std::cerr << std::endl;
+#endif
+            result = tarray[sample_point_around_threshold]; // Use the current time if no previous point exists
+            return false;
+        }
+
+        result = t_before + (t_after - t_before) * (threshold - a_before) / (a_after - a_before);
+        return true;
+    }
+
     template <typename T>
     inline void VMultiIO<T>::ClearMap()
     {
@@ -353,10 +377,19 @@ namespace WFDataProcessor
     }
 
     template <typename T>
+    inline VMultiIO<T> *&VMultiIO<T>::CurrentInstance()
+    {
+        // TODO: insert return statement here
+        static VMultiIO<T> *instance = nullptr;
+        return instance;
+    }
+
+    template <typename T>
     inline VMultiIO<T>::VMultiIO(bool isRead, std::vector<int> channelsToRead) : VMultiIO<T>(isRead)
     {
         for (int ch : channelsToRead)
             AddChannel(ch);
+        CurrentInstance() = this;
     }
     template <typename T>
     inline VMultiIO<T>::~VMultiIO()
@@ -367,6 +400,8 @@ namespace WFDataProcessor
             delete pair.second;
             pair.second = nullptr;
         }
+        if (CurrentInstance() == this)
+            CurrentInstance() = nullptr;
     }
     template <typename T>
     inline bool VMultiIO<T>::AddChannel(int channel)
