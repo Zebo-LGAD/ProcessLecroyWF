@@ -65,10 +65,21 @@ namespace PRAlgorithms
         double ReconstructY(const std::vector<double> &signals) const override { return 0.0; };
         double ReconstructX(PRAlgorithms::_neighbor_pads pads, _neighbor_pads_signals signals) const;
 
+        typedef struct _lr_pr_info
+        {
+            _neighbor_pads pads;
+            _neighbor_chs chs;
+            _neighbor_pads_signals signals;
+            double reconX;
+            double reconY;
+        } PRinfo;
+        
         // Input waveinfo from oscilloscope channels
         bool PRfromWaveInfo(const std::map<int, WFDataProcessor::_waveinfo *> &chWaveInfoMap, double &outX, double &outY) const;
+        bool PRfromWaveInfo(const std::map<int, WFDataProcessor::_waveinfo *> &chWaveInfoMap, PRinfo & info) const;
 
-        const std::map<_neighbor_pads, SectionData> &GetSectionData(int sectionIndex) const { return fmSectionDB; };
+        const SectionData& GetPadRightSection(int pad) const;
+        const std::map<_neighbor_pads, SectionData> &GetSectionMap() const { return fmSectionDB; };
         const std::map<int, double> &GetPadNormFactors() const { return fmPadNormFactors; };
         bool SetPadNormFactors(const std::map<int, double> &padNormFactors);
         bool SetPadNormFactorsFromCali();

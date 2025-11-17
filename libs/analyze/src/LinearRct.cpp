@@ -112,12 +112,12 @@ double PRAlgorithms::LinearRct::ReconstructX(PRAlgorithms::_neighbor_pads pads, 
 
     auto section = iter->second;
 
-    auto fmPadFactors = section._factors;
+    // auto fmPadFactors = section._factors;
     auto leftPad = pads.first;
     auto rightPad = pads.second;
 
-    double factorLeft = fmPadFactors.at(leftPad);
-    double factorRight = fmPadFactors.at(rightPad);
+    double factorLeft = fmPadNormFactors.at(leftPad);
+    double factorRight = fmPadNormFactors.at(rightPad);
     double signalLeft = signals.first;
     double signalRight = signals.second;
     double ratio = (signalLeft * factorLeft) / (signalLeft * factorLeft + signalRight * factorRight);
@@ -131,6 +131,17 @@ double PRAlgorithms::LinearRct::ReconstructX(PRAlgorithms::_neighbor_pads pads, 
 #include "WFDataConverter.h"
 // TODO: complete implementation
 bool PRAlgorithms::LinearRct::PRfromWaveInfo(const std::map<int, WFDataProcessor::_waveinfo *> &chWaveInfoMap, double &outX, double &outY) const
+{
+    PRinfo info;
+    auto rtn = PRfromWaveInfo(chWaveInfoMap, info);
+    if (!rtn)
+        return false;
+    outX = info.reconX;
+    outY = info.reconY;
+    return true;
+}
+
+bool PRAlgorithms::LinearRct::PRfromWaveInfo(const std::map<int, WFDataProcessor::_waveinfo *> &chWaveInfoMap, PRinfo &info) const
 {
     // Generate neighbor pads signals map
     std::map<_neighbor_pads, _neighbor_pads_signals> neighborPadsSignalsMap;
@@ -170,10 +181,29 @@ bool PRAlgorithms::LinearRct::PRfromWaveInfo(const std::map<int, WFDataProcessor
     }
     auto selectedPads = iter->first;
     auto selectedSignals = neighborPadsSignalsMap.at(selectedPads);
-    outX = ReconstructX(selectedPads, selectedSignals);
-    outY = 0.0; // Y reconstruction not implemented yet
+    auto channels = dataMap.GetNeighborPadsToChsX().at(selectedPads);
+
+    info.pads = selectedPads;
+    info.chs = channels;
+    info.signals = selectedSignals;
+    info.reconX = ReconstructX(selectedPads, selectedSignals);
+    info.reconY = 0.0; // Y reconstruction not implemented yet
 
     return true;
+}
+
+const PRAlgorithms::SectionData &PRAlgorithms::LinearRct::GetPadRightSection(int pad) const
+{
+    auto caliMap = GetCaliDataMapConst();
+    int padRight;
+    auto rtn = caliMap.GetRightPad(pad, padRight);
+    auto iter = fmSectionDB.find(std::make_pair(pad, padRight));
+    if (!rtn || iter == fmSectionDB.end())
+    {
+        std::cout << "Section data for pad " << pad << " and its right pad not found!" << std::endl;
+        throw std::runtime_error("Section data not found");
+    }
+    return iter->second;
 }
 
 bool PRAlgorithms::LinearRct::SetPadNormFactors(const std::map<int, double> &padNormFactors)
@@ -203,7 +233,7 @@ bool PRAlgorithms::LinearRct::SetPadNormFactorsFromCali()
     auto datavec = fmSectionDB.begin()->second._factors;
     for (size_t idx = 0; idx < datavec.size(); idx++)
     {
-        int channel = caliMap.GetChannel(idx + 1);
+        int channel = idx + 1;
         int pad = caliMap.GetPad(channel);
         padNormFactors[pad] = datavec[idx];
     }
