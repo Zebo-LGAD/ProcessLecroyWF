@@ -10,3 +10,8 @@ add_test(NAME process_sr90 COMMAND process_sr90)
 add_executable(test_analyze test_analyze.cpp)
 target_link_libraries(test_analyze PUBLIC analyze lcparser ROOT::Core ROOT::Tree ROOT::Graf)
 add_test(NAME test_analyze COMMAND test_analyze)
+
+add_executable(test_prdata test_prdata.cpp)
+target_link_libraries(test_prdata PUBLIC analyze lcparser ROOT::Core ROOT::Tree ROOT::Graf)
+add_test(NAME test_prdata COMMAND test_prdata)
+

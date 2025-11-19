@@ -11,6 +11,7 @@ namespace PRAlgorithms
     typedef std::pair<int, int> _neighbor_chs;                // two channels corresponding to _neighbor_pads
     typedef std::pair<int, int> _neighbor_chs_signals;        // two signals corresponding to _neighbor_chs
     typedef std::pair<int, int> _pad_xy;                      // pad column and row
+    typedef std::pair<double, double> _pad_xy_width;          // pad column width and row width
 
     // Used for sensor oscilloscope test, mapping scope channels to sensor pad.
     // Pad is important here, but channel may change in different oscilloscope setups.
@@ -63,10 +64,18 @@ namespace PRAlgorithms
         const std::map<_neighbor_pads, _neighbor_chs> &GetNeighborPadsToChsX() const { return fmNeighborPadsToChsX; };
         const std::map<_neighbor_pads, _neighbor_chs> &GetNeighborPadsToChsY() const { return fmNeighborPadsToChsY; };
 
+        bool SetUniformPadSize(double padcolumnwidth, double padrowwidth = 0); // 0 means ignore row width, for 1D line sensor
+        bool SetPadSize(int pad, double padcolumnwidth, double padrowwidth = 0);
+        _pad_xy_width GetPadSize(int pad) const;
+        bool IsUniformPadSize() const { return fIsUniformPadSize; };
+
     private:
         std::map<int, int> fmChannelToPad;
         std::map<int, int> fmPadToChannel;
-        TMatrix fPadMatrix; // Pad arrangement matrix for 2D sensor (or 1D line)
+        TMatrix fPadMatrix;                          // Pad arrangement matrix for 2D sensor (or 1D line)
+        std::map<int, _pad_xy_width> fmPadToXYWidth; // Pad to (column width, row width) map
+        bool fIsUniformPadSize = false;                // Whether all pads have uniform size
+        _pad_xy_width fUniformPadXYWidth{0, 0};      // Uniform pad size if fIsUniformPadSize is true
 
         bool fMapClosed = false;                                      // Whether the map is closed for further insertion
         std::vector<_pad_xy> fvValidPadX;                             // Pads has right neighbor
@@ -79,8 +88,6 @@ namespace PRAlgorithms
 
     bool JudgeSubMatrix(const TMatrix &submatrix, const TMatrix &matrix);
 
-
-    
     /// @brief pads in lhs is subset of pads in rhs, channels in lhs is not considered, and lhs's pad matrix is submatrix of rhs's pad matrix, so as to ensure the relative positions among pads in lhs is same as in rhs
     bool operator<=(const ChannelPadMap &lhs, const ChannelPadMap &rhs);
     bool operator>=(const ChannelPadMap &lhs, const ChannelPadMap &rhs);
@@ -101,6 +108,8 @@ namespace PRAlgorithms
         /// @return
         ChannelPadMap &GetPRDataMap() { return fmCPReconstruct; };
         const ChannelPadMap &GetPRDataMapConst() const { return fmCPReconstruct; };
+        virtual bool SetUniformPadSize(double padcolumnwidth, double padrowwidth = 0); // 0 means ignore row width, for 1D line sensor
+
 
         friend std::ostream &operator<<(std::ostream &os, const VPRAlgorithm &algo);
         void Print(std::ostream &os = std::cout) { os << (*this); };

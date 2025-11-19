@@ -182,8 +182,12 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
     double _max_a = -1.0e9;
     double _max_t = 0;
     int _sample_max = 0;
-    double _charge = 0;
     double _dt = (t[1] - t[0]) * 1.0e9; // assuming uniform sampling, units in ns
+    double _charge_10 = 0;
+    double _charge_50 = 0;
+    double _charge_90 = 0;
+    double _charge_pm2ns = 0;
+    double _charge_full = 0;
 
     double _toa = -100e9;
     double _xMeasure = 0;
@@ -235,7 +239,7 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
 
         if (temp_time >= search_range.first && temp_time <= search_range.second)
         {
-            _charge += _amp_temp * _dt;
+            _charge_full += _amp_temp * _dt;
             if (_amp_temp > _max_a)
             {
                 _max_a = _amp_temp;
@@ -243,6 +247,19 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
                 _sample_max = _sample_point;
             }
         }
+    }
+
+    // Calculate charge from t_amp-2ns to t_amp+2ns
+    int _t_amp_minus_2ns_sample = _sample_max - static_cast<int>(2.0 / _dt);
+    int _t_amp_plus_2ns_sample = _sample_max + static_cast<int>(2.0 / _dt);
+    if (_t_amp_minus_2ns_sample < 0)
+        _t_amp_minus_2ns_sample = 0;
+    if (_t_amp_plus_2ns_sample >= Nsamples)
+        _t_amp_plus_2ns_sample = Nsamples - 1;
+    for (int _sample_point = _t_amp_minus_2ns_sample; _sample_point <= _t_amp_plus_2ns_sample; _sample_point++)
+    {
+        double _amp_temp = _a[_sample_point] - _ped_start; // units in mV
+        _charge_pm2ns += _amp_temp * _dt;
     }
 
     // Scan from _t_max_ down to find rise time from 10% to 90%
@@ -297,6 +314,14 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
             // auto flag = interpolateTOA(t, a, _sample_point, _threshold, _ped_start, _t1);
             auto flag = interpolateTOA2(_t, _a, Nsamples, _sample_point, _threshold, _ped_start, _t1);
         }
+
+        if (!_found_10)
+            _charge_10 += _amp_temp * _dt;
+        if (!_found_50)
+            _charge_50 += _amp_temp * _dt;
+        if (!_found_90)
+            _charge_90 += _amp_temp * _dt;
+
         if (_found_10 && _found_50 && _found_90 && _found_t1)
             break; // all found, exit loop
     }
@@ -358,6 +383,14 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
             // auto flag = interpolateTOA(t, a, _sample_point, _threshold, _ped_start, _t2);
             auto flag = interpolateTOA2(_t, _a, Nsamples, _sample_point, _threshold, _ped_start, _t2);
         }
+
+        if (!_found_10)
+            _charge_10 += _amp_temp * _dt;
+        if (!_found_50)
+            _charge_50 += _amp_temp * _dt;
+        if (!_found_90)
+            _charge_90 += _amp_temp * _dt;
+
         if (_found_10 && _found_50 && _found_90 && _found_t2)
             break; // all found, exit loop
     }
@@ -370,25 +403,26 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
     if (!_found_t2)
         winfo.valid |= NO_T2_FOUND;
 
-    // Scan from _sample_up to _sample_down to find time of arrival at 50% of max amplitude
-    double _toa_threshold = _amp_50; // 50% of max amplitude
-    for (int _sample_point = _sample_up; _sample_point < _sample_down; _sample_point++)
-    {
-        double temp_time = _t[_sample_point]; // convert to ns
-        if (temp_time < search_range.first)
-            continue; // only search for toa in the region after the up_range_t0
-        if (temp_time > search_range.second)
-            break; // only search for toa in the region before the down_range_t0
+    // // Scan from _sample_up to _sample_down to find time of arrival at 50% of max amplitude
+    // double _toa_threshold = _amp_50; // 50% of max amplitude
+    // for (int _sample_point = _sample_up; _sample_point < _sample_down; _sample_point++)
+    // {
+    //     double temp_time = _t[_sample_point]; // convert to ns
+    //     if (temp_time < search_range.first)
+    //         continue; // only search for toa in the region after the up_range_t0
+    //     if (temp_time > search_range.second)
+    //         break; // only search for toa in the region before the down_range_t0
 
-        double _amp_temp = _a[_sample_point] - _ped_start;          // units in mV
-        double _amp_temp_last = _a[_sample_point - 1] - _ped_start; // units in mV
-        if (_amp_temp >= _toa_threshold && _amp_temp_last < _toa_threshold)
-        {
-            // auto flag = interpolateTOA(t, a, _sample_point, _toa_threshold, _ped_start, _toa);
-            auto flag = interpolateTOA2(_t, _a, Nsamples, _sample_point, _toa_threshold, _ped_start, _toa);
-            break;
-        }
-    }
+    //     double _amp_temp = _a[_sample_point] - _ped_start;          // units in mV
+    //     double _amp_temp_last = _a[_sample_point - 1] - _ped_start; // units in mV
+    //     if (_amp_temp >= _toa_threshold && _amp_temp_last < _toa_threshold)
+    //     {
+    //         // auto flag = interpolateTOA(t, a, _sample_point, _toa_threshold, _ped_start, _toa);
+    //         auto flag = interpolateTOA2(_t, _a, Nsamples, _sample_point, _toa_threshold, _ped_start, _toa);
+    //         break;
+    //     }
+    // }
+    _toa = _t1_50; // set toa to t1_50 for consistency
 
     // Calculate the pedestal, mean and standard deviation of the last 10% of the waveform
     double _ped_sum_end = 0;
@@ -420,11 +454,16 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
     winfo.t1_50 = _t1_50;
     winfo.t1_90 = _t1_90;
     winfo.toa = _toa;
-    winfo.charge = _charge;
     winfo.t2 = _t2;
     winfo.t2_10 = _t2_10;
     winfo.t2_50 = _t2_50;
     winfo.t2_90 = _t2_90;
+    winfo.charge_10 = _charge_10;
+    winfo.charge_50 = _charge_50;
+    winfo.charge_90 = _charge_90;
+    winfo.charge_pm2ns = _charge_pm2ns;
+    winfo.charge_full = _charge_full;
+    winfo.charge = winfo.charge_50; // for backward compatibility
 
     if (!need_draw)
     {
@@ -493,7 +532,7 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
         linex2.SetLineStyle(2);
         linex2.Draw("same");
 
-        TLine linex3(search_range.first, _ped_start + _toa_threshold, search_range.second, _ped_start + _toa_threshold); // convert to V
+        TLine linex3(search_range.first, _ped_start + _amp_50, search_range.second, _ped_start + _amp_50); // convert to V
         linex3.SetLineColor(kBlue);
         linex3.SetLineStyle(2);
         linex3.Draw("same");
@@ -546,6 +585,11 @@ void WFDataProcessor::GenerateBranchForWaveInfo(TTree *tree, const std::string &
     tree->Branch(Form("%s_t2_10", branchNamePrefix.c_str()), &winfo->t2_10, Form("%s_t2_10/D", branchNamePrefix.c_str()));
     tree->Branch(Form("%s_t2_50", branchNamePrefix.c_str()), &winfo->t2_50, Form("%s_t2_50/D", branchNamePrefix.c_str()));
     tree->Branch(Form("%s_t2_90", branchNamePrefix.c_str()), &winfo->t2_90, Form("%s_t2_90/D", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_q_10", branchNamePrefix.c_str()), &winfo->charge_10, Form("%s_q_10/D", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_q_50", branchNamePrefix.c_str()), &winfo->charge_50, Form("%s_q_50/D", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_q_90", branchNamePrefix.c_str()), &winfo->charge_90, Form("%s_q_90/D", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_q_pm2ns", branchNamePrefix.c_str()), &winfo->charge_pm2ns, Form("%s_q_pm2ns/D", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_q_full", branchNamePrefix.c_str()), &winfo->charge_full, Form("%s_q_full/D", branchNamePrefix.c_str()));
 }
 
 void WFDataProcessor::SetBranchAddressToWaveInfo(TTree *tree, const std::string &branchNamePrefix, WFDataProcessor::_waveinfo *winfo)
@@ -568,6 +612,11 @@ void WFDataProcessor::SetBranchAddressToWaveInfo(TTree *tree, const std::string 
     tree->SetBranchAddress(Form("%s_t2_10", branchNamePrefix.c_str()), &winfo->t2_10);
     tree->SetBranchAddress(Form("%s_t2_50", branchNamePrefix.c_str()), &winfo->t2_50);
     tree->SetBranchAddress(Form("%s_t2_90", branchNamePrefix.c_str()), &winfo->t2_90);
+    tree->SetBranchAddress(Form("%s_q_10", branchNamePrefix.c_str()), &winfo->charge_10);
+    tree->SetBranchAddress(Form("%s_q_50", branchNamePrefix.c_str()), &winfo->charge_50);
+    tree->SetBranchAddress(Form("%s_q_90", branchNamePrefix.c_str()), &winfo->charge_90);
+    tree->SetBranchAddress(Form("%s_q_pm2ns", branchNamePrefix.c_str()), &winfo->charge_pm2ns);
+    tree->SetBranchAddress(Form("%s_q_full", branchNamePrefix.c_str()), &winfo->charge_full);
 }
 
 WFDataProcessor::WFDataExtractor::WFDataExtractor(std::vector<int> channelsToRead) : VMultiChannelWriter<_waveinfo>(channelsToRead)
@@ -575,8 +624,6 @@ WFDataProcessor::WFDataExtractor::WFDataExtractor(std::vector<int> channelsToRea
     for (int ch : channelsToRead)
         fmChExtractConfig[ch] = _extract_config();
 }
-
-
 
 bool WFDataProcessor::WFDataExtractor::AddChannel(int channel)
 {
@@ -694,6 +741,21 @@ bool WFDataProcessor::WFDataExtractor::ExtractFromWFtrc2ROOT(const WFDataProcess
     return ExtractFromScopeData(convertor.GetChannelDataMap(), convertor.GetChannelDataHasDataMap());
 }
 
+bool WFDataProcessor::WFDataExtractor::ExtractFromWFROOTReader(const WFDataProcessor::WFROOTReader &reader)
+{
+    std::map<int, ScopeData *> readDataMap;
+    std::map<int, bool> readDataHasDataMap;
+    for (auto &pair : reader.GetChannelDataMap())
+    {
+        int channel = pair.first;
+        ScopeData *ptr = *(pair.second);
+        readDataMap[channel] = ptr;
+        readDataHasDataMap[channel] = true;
+    }
+
+    return ExtractFromScopeData(readDataMap, readDataHasDataMap);
+}
+
 bool WFDataProcessor::WFDataExtractor::TurnOnPlot(int channel, const std::string &savePrefix, bool bswitch)
 {
 
@@ -765,7 +827,7 @@ bool WFDataProcessor::ReadAllWF(const std::string &folder, int idx_lecroy_wf, st
     {
         int channel = pair.first;
         ScopeData *chData = pair.second;
-        std::string filepath = GenerateScopeFileName(folder, channel, idx_lecroy_wf);
+        std::string filepath = GenerateScopeFileName(folder, channel, idx_lecroy_wf, mid_name, ext);
         ScopeData::errorCodes err = chData->InitData(filepath);
 
         if (err == ScopeData::kSUCCESS)

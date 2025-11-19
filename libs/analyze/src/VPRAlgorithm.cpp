@@ -10,6 +10,7 @@ bool PRAlgorithms::ChannelPadMap::SetMapC2P(std::map<int, int> channelToPad)
         {
             fmChannelToPad.clear();
             fmPadToChannel.clear();
+            fmPadToXYWidth.clear();
             return false;
         }
     }
@@ -25,6 +26,7 @@ bool PRAlgorithms::ChannelPadMap::SetMapP2C(std::map<int, int> padToChannel)
         {
             fmChannelToPad.clear();
             fmPadToChannel.clear();
+            fmPadToXYWidth.clear();
             return false;
         }
     }
@@ -158,6 +160,7 @@ void PRAlgorithms::ChannelPadMap::Clear()
 {
     fmChannelToPad.clear();
     fmPadToChannel.clear();
+    fmPadToXYWidth.clear();
     fvValidPadX.clear();
     fvValidPadY.clear();
     fmPadXYToNeighborPadsX.clear();
@@ -218,6 +221,66 @@ bool PRAlgorithms::ChannelPadMap::GetDownPad(int pad, int &downpad) const
     if (downpad <= 0)
         return false;
     return true;
+}
+
+bool JudgeWidthValid(double columnwidth, double rowwidth)
+{
+    if (columnwidth == 0 && rowwidth == 0)
+        return false;
+    if (columnwidth < 0 || rowwidth < 0)
+        return false;
+
+    return true;
+}
+
+bool PRAlgorithms::ChannelPadMap::SetUniformPadSize(double padcolumnwidth, double padrowwidth)
+{
+    if (!JudgeWidthValid(padcolumnwidth, padrowwidth))
+        return false;
+
+    for (const auto &pair : fmPadToChannel)
+    {
+        int pad = pair.first;
+        fmPadToXYWidth[pad] = _pad_xy_width(padcolumnwidth, padrowwidth);
+    }
+    fIsUniformPadSize = true;
+    fUniformPadXYWidth = _pad_xy_width(padcolumnwidth, padrowwidth);
+    return true;
+}
+
+bool PRAlgorithms::ChannelPadMap::SetPadSize(int pad, double padcolumnwidth, double padrowwidth)
+{
+    if (!JudgeWidthValid(padcolumnwidth, padrowwidth))
+        return false;
+
+    auto it = fmPadToChannel.find(pad);
+    if (it == fmPadToChannel.end())
+        return false;
+
+    if (fIsUniformPadSize)
+    {
+        if (padcolumnwidth == fUniformPadXYWidth.first && padrowwidth == fUniformPadXYWidth.second)
+        {
+            std::cout << "Warning: Pad size is the same as uniform pad size, ignoring resetting." << std::endl;
+            return false; // Same as uniform size
+        }
+        fIsUniformPadSize = false;
+        fUniformPadXYWidth = _pad_xy_width(0, 0);
+    }
+
+    fmPadToXYWidth[pad] = _pad_xy_width(padcolumnwidth, padrowwidth);
+    return true;
+}
+
+PRAlgorithms::_pad_xy_width PRAlgorithms::ChannelPadMap::GetPadSize(int pad) const
+{
+    if (fIsUniformPadSize)
+        return fUniformPadXYWidth;
+
+    auto it = fmPadToXYWidth.find(pad);
+    if (it != fmPadToXYWidth.end())
+        return it->second;
+    return _pad_xy_width(0, 0); // Not found
 }
 
 void PRAlgorithms::ChannelPadMap::InitializeMap()
@@ -402,4 +465,9 @@ std::ostream &PRAlgorithms::operator<<(std::ostream &os, const VPRAlgorithm &alg
     os << algo.fmCPReconstruct;
 
     return os;
+}
+
+bool PRAlgorithms::VPRAlgorithm::SetUniformPadSize(double padcolumnwidth, double padrowwidth)
+{
+    return fmCPReconstruct.SetUniformPadSize(padcolumnwidth, padrowwidth);
 }

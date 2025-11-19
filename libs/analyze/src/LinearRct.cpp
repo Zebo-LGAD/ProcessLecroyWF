@@ -120,7 +120,31 @@ double PRAlgorithms::LinearRct::ReconstructX(PRAlgorithms::_neighbor_pads pads, 
     double factorRight = fmPadNormFactors.at(rightPad);
     double signalLeft = signals.first;
     double signalRight = signals.second;
-    double ratio = (signalLeft * factorLeft) / (signalLeft * factorLeft + signalRight * factorRight);
+    double normedSignalLeft = signalLeft * factorLeft;
+    double normedSignalRight = signalRight * factorRight;
+
+    // Avoid too small signals
+    if (normedSignalLeft < 10 && normedSignalRight < 10) // approximately 10/20=0.5 fC
+        return 0.0;
+
+    static int count_left_small = 0;
+    static int count_right_small = 0;
+    static int count_normal = 0;
+    if (normedSignalLeft < 0.15 * (normedSignalLeft + normedSignalRight))
+    {
+        double posrightEdge = section._edgeX.second;
+        double padwidth = fmCalibrationData.GetPadSize(rightPad).first;
+        return posrightEdge + padwidth / 2.0;
+    }
+
+    if (normedSignalRight < 0.15 * (normedSignalLeft + normedSignalRight))
+    {
+        double posleftEdge = section._edgeX.first;
+        double padwidth = fmCalibrationData.GetPadSize(leftPad).first;
+        return posleftEdge - padwidth / 2.0;
+    }
+
+    double ratio = (normedSignalLeft) / (normedSignalLeft + normedSignalRight);
     double _a0 = section._pol1->GetParameter(0);
     double _a1 = section._pol1->GetParameter(1);
     double x = (ratio - _a0) / _a1;
@@ -239,6 +263,13 @@ bool PRAlgorithms::LinearRct::SetPadNormFactorsFromCali()
     }
     auto rtn = SetPadNormFactors(padNormFactors);
     return rtn;
+}
+
+bool PRAlgorithms::LinearRct::SetUniformPadSize(double padcolumnwidth, double padrowwidth)
+{
+    auto rtn1 = fmCalibrationData.SetUniformPadSize(padcolumnwidth, padrowwidth);
+    auto rtn2 = VPRAlgorithm::SetUniformPadSize(padcolumnwidth, padrowwidth);
+    return rtn1 && rtn2;
 }
 
 #include <TSystem.h>

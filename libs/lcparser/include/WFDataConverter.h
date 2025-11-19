@@ -31,15 +31,15 @@ namespace WFDataProcessor
     {
         VALID = 0,
         NO_WAVEFORM = 1,
-        NO_T1_FOUND = 1<<1,
-        NO_T1_10_FOUND = 1<<2,
-        NO_T1_50_FOUND = 1<<3,
-        NO_T1_90_FOUND = 1<<4,
-        NO_T2_FOUND = 1<<5,
-        NO_T2_10_FOUND = 1<<6,
-        NO_T2_50_FOUND = 1<<7,
-        NO_T2_90_FOUND = 1<<8,
-        RANGE_ERROR = 1<<9,
+        NO_T1_FOUND = 1 << 1,
+        NO_T1_10_FOUND = 1 << 2,
+        NO_T1_50_FOUND = 1 << 3,
+        NO_T1_90_FOUND = 1 << 4,
+        NO_T2_FOUND = 1 << 5,
+        NO_T2_10_FOUND = 1 << 6,
+        NO_T2_50_FOUND = 1 << 7,
+        NO_T2_90_FOUND = 1 << 8,
+        RANGE_ERROR = 1 << 9,
     };
 
     /// @brief Structure to hold extracted waveform information
@@ -63,6 +63,11 @@ namespace WFDataProcessor
         double ped_end;           ///  Pedestal at the end of the waveform (in mV)
         double ped_end_std_dev;   ///  Standard deviation of the pedestal at the end (in mV)
         uint32_t valid;           ///  Flag indicating if the waveform is valid (1) or not (0)
+        double charge_10;         ///  Charge integrated from t1_10 to t2_10 (in mV*ns)
+        double charge_50;         ///  Charge integrated from t1_50 to t2_50 (in mV*ns)
+        double charge_90;         ///  Charge integrated from t1_90 to t2_90 (in mV*ns)
+        double charge_full;       ///  Charge integrated from start to end (in mV*ns)
+        double charge_pm2ns;      ///  Charge integrated from t_amp-2ns to t_amp+2ns (in mV*ns)
     };
 
     /// @brief Get interpolated time of arrival at given threshold, using linear interpolation
@@ -197,6 +202,8 @@ namespace WFDataProcessor
 {
 
     class WFtrc2ROOT;
+    class WFROOTReader;
+
     /// @brief Extract information from a ScopeData object
     class WFDataExtractor : public VMultiChannelWriter<_waveinfo>
     {
@@ -214,6 +221,7 @@ namespace WFDataProcessor
         bool ExtractFromScopeData(const std::map<int, ScopeData *> &chDataMap, const std::map<int, bool> &chDataHasDataMap);
         bool ExtractFromTRCFiles(const std::string &folder, int idx_file, std::string mid_name = "--Trace--", std::string ext = ".trc");
         bool ExtractFromWFtrc2ROOT(const WFDataProcessor::WFtrc2ROOT &convertor);
+        bool ExtractFromWFROOTReader(const WFDataProcessor::WFROOTReader &reader);
 
         bool TurnOnPlot(int channel, const std::string &savePrefix, bool bswitch = true);
         bool TurnOffPlot(int channel) { return TurnOnPlot(channel, "", false); };
