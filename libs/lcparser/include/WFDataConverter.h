@@ -68,6 +68,8 @@ namespace WFDataProcessor
         double charge_90;         ///  Charge integrated from t1_90 to t2_90 (in mV*ns)
         double charge_full;       ///  Charge integrated from start to end (in mV*ns)
         double charge_pm2ns;      ///  Charge integrated from t_amp-2ns to t_amp+2ns (in mV*ns)
+        double t_min;             ///  Time of minimum amplitude (in ns)
+        double amp_min;           ///  Minimum amplitude of the waveform (in mV), subtract backend pedestal, only find within search range
     };
 
     /// @brief Get interpolated time of arrival at given threshold, using linear interpolation

@@ -192,6 +192,9 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
     double _toa = -100e9;
     double _xMeasure = 0;
 
+    double _min_t = 0;
+    double _min_a = 1.0e9;
+
     // Generate new array inside
     auto _t = new double[Nsamples];
     auto _a = new double[Nsamples];
@@ -245,6 +248,11 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
                 _max_a = _amp_temp;
                 _max_t = temp_time;
                 _sample_max = _sample_point;
+            }
+            if (_amp_temp < _min_a)
+            {
+                _min_a = _amp_temp;
+                _min_t = temp_time;
             }
         }
     }
@@ -464,6 +472,8 @@ void WFDataProcessor::processWave(const double *t, const double *a, int Nsamples
     winfo.charge_pm2ns = _charge_pm2ns;
     winfo.charge_full = _charge_full;
     winfo.charge = winfo.charge_50; // for backward compatibility
+    winfo.t_min = _min_t;
+    winfo.amp_min = _min_a + _ped_start - _ped_end; // subtract backend pedestal
 
     if (!need_draw)
     {
@@ -590,6 +600,8 @@ void WFDataProcessor::GenerateBranchForWaveInfo(TTree *tree, const std::string &
     tree->Branch(Form("%s_q_90", branchNamePrefix.c_str()), &winfo->charge_90, Form("%s_q_90/D", branchNamePrefix.c_str()));
     tree->Branch(Form("%s_q_pm2ns", branchNamePrefix.c_str()), &winfo->charge_pm2ns, Form("%s_q_pm2ns/D", branchNamePrefix.c_str()));
     tree->Branch(Form("%s_q_full", branchNamePrefix.c_str()), &winfo->charge_full, Form("%s_q_full/D", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_t_min", branchNamePrefix.c_str()), &winfo->t_min, Form("%s_t_min/D", branchNamePrefix.c_str()));
+    tree->Branch(Form("%s_amp_min", branchNamePrefix.c_str()), &winfo->amp_min, Form("%s_amp_min/D", branchNamePrefix.c_str()));
 }
 
 void WFDataProcessor::SetBranchAddressToWaveInfo(TTree *tree, const std::string &branchNamePrefix, WFDataProcessor::_waveinfo *winfo)
@@ -617,6 +629,8 @@ void WFDataProcessor::SetBranchAddressToWaveInfo(TTree *tree, const std::string 
     tree->SetBranchAddress(Form("%s_q_90", branchNamePrefix.c_str()), &winfo->charge_90);
     tree->SetBranchAddress(Form("%s_q_pm2ns", branchNamePrefix.c_str()), &winfo->charge_pm2ns);
     tree->SetBranchAddress(Form("%s_q_full", branchNamePrefix.c_str()), &winfo->charge_full);
+    tree->SetBranchAddress(Form("%s_t_min", branchNamePrefix.c_str()), &winfo->t_min);
+    tree->SetBranchAddress(Form("%s_amp_min", branchNamePrefix.c_str()), &winfo->amp_min);
 }
 
 WFDataProcessor::WFDataExtractor::WFDataExtractor(std::vector<int> channelsToRead) : VMultiChannelWriter<_waveinfo>(channelsToRead)
